@@ -1,10 +1,12 @@
 package com.mycompany.garaje2;
 
 import java.awt.*;
+import java.awt.Dimension;
 import java.io.File;
 import java.io.IOException;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.regex.Pattern;
 import javax.sound.sampled.*;
 import javax.sound.sampled.LineEvent.Type;
 import javax.swing.*;
@@ -133,7 +135,8 @@ public class Garaje2 {
         menuBar.add(menu);
         frame.setJMenuBar(menuBar);
 
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        JPanel buttonPanel = new JPanel(new GridLayout(2, 3, 10, 10));
+        buttonPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         JButton ocupacionParkingButton = new JButton("Ocupación Parking");
         ocupacionParkingButton.addActionListener(e -> mostrarUsuariosGaraje());
@@ -155,31 +158,108 @@ public class Garaje2 {
         facturacionAbonosButton.addActionListener(e -> mostrarFacturacionAbonos());
         buttonPanel.add(facturacionAbonosButton);
 
+        JButton playSongsButton = new JButton("Elegir canción");
+        playSongsButton.addActionListener(e -> playSongs());
+        buttonPanel.add(playSongsButton);
+
         frame.add(buttonPanel, BorderLayout.SOUTH);
 
     }
 
     private void mostrarPago() {
-        try {
-            String dni = JOptionPane.showInputDialog(frame, "Ingrese el DNI:");
-            String nombre = JOptionPane.showInputDialog(frame, "Ingrese el nombre:");
-            String apellidos = JOptionPane.showInputDialog(frame, "Ingrese los apellidos:");
-            String numTarjeta = JOptionPane.showInputDialog(frame, "Ingrese el número de tarjeta:");
+        // Crear un JDialog para la entrada de datos de pago
+        JDialog pagoDialog = new JDialog(frame, "Pago", true);
+        pagoDialog.setSize(400, 300);
+        pagoDialog.setLocationRelativeTo(frame);
 
-            // Calcular el importe del pago
-            double importe = calcularImportePago(dni);
+        // Crear un panel para la entrada de datos de pago
+        JPanel pagoPanel = new JPanel(new GridLayout(6, 2, 10, 10));
+        pagoPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-            // Mostrar detalles del pago al usuario
-            String mensaje = String.format("Importe a pagar: %.2f euros", importe);
-            JOptionPane.showMessageDialog(frame, mensaje, "Detalles del Pago", JOptionPane.INFORMATION_MESSAGE);
+        // Añadir etiquetas y campos de texto al panel
+        JTextField dniField = new JTextField();
+        JTextField nombreField = new JTextField();
+        JTextField apellidosField = new JTextField();
+        JTextField numTarjetaField = new JTextField();
+        JComboBox<Integer> numeroCocheComboBox = new JComboBox<>();
 
-            // Realizar el pago y actualizar la tabla Abonos
-            realizarPago(dni, nombre, apellidos, numTarjeta, importe);
-        } catch (NumberFormatException e) {
-            handleError("Formato de número incorrecto. Ingrese un valor numérico válido.", e);
-        } catch (Exception e) {
-            handleError("Error al procesar el pago.", e);
+        // Cargar números de coche en el combo box
+        cargarNumerosDeCoche(numeroCocheComboBox);
+
+        pagoPanel.add(new JLabel("DNI:"));
+        pagoPanel.add(dniField);
+
+        pagoPanel.add(new JLabel("Nombre:"));
+        pagoPanel.add(nombreField);
+
+        pagoPanel.add(new JLabel("Apellidos:"));
+        pagoPanel.add(apellidosField);
+
+        pagoPanel.add(new JLabel("Número de Tarjeta:"));
+        pagoPanel.add(numTarjetaField);
+
+        pagoPanel.add(new JLabel("Número de Coche:"));
+        pagoPanel.add(numeroCocheComboBox);
+
+        // Añadir botón de pago
+        JButton pagarButton = new JButton("Realizar Pago");
+        pagarButton.addActionListener(e -> {
+            try {
+                String dni = dniField.getText();
+                String nombre = nombreField.getText();
+                String apellidos = apellidosField.getText();
+                String numTarjeta = numTarjetaField.getText();
+                int numeroCoche = (int) numeroCocheComboBox.getSelectedItem();
+
+                // Validar campos antes de procesar el pago
+                if (validarCamposPago(dni, nombre, apellidos, numTarjeta)) {
+                    // Calcular el importe del pago
+                    double importe = calcularImportePago(dni);
+
+                    // Mostrar detalles del pago al usuario
+                    String mensaje = String.format("Importe a pagar: %.2f euros", importe);
+                    JOptionPane.showMessageDialog(frame, mensaje, "Detalles del Pago", JOptionPane.INFORMATION_MESSAGE);
+
+                    // Realizar el pago y actualizar la tabla Abonos
+                    realizarPago(dni, nombre, apellidos, numTarjeta, importe, numeroCoche);
+
+                    // Cerrar el diálogo después de realizar el pago
+                    pagoDialog.dispose();
+                }
+            } catch (NumberFormatException | SQLException ex) {
+                handleError("Error al procesar el pago.", ex);
+            }
+        });
+
+        pagoPanel.add(new JLabel());  // Espaciador
+        pagoPanel.add(pagarButton);
+
+        pagoDialog.add(pagoPanel, BorderLayout.CENTER);
+        pagoDialog.setVisible(true);
+    }
+
+    private boolean validarCamposPago(String dni, String nombre, String apellidos, String numTarjeta) {
+        // Validar DNI con una expresión regular simple
+        String dniRegex = "\\d{8}[A-HJ-NP-TV-Z]";
+        if (!Pattern.matches(dniRegex, dni)) {
+            JOptionPane.showMessageDialog(frame, "Formato de DNI incorrecto. Introduzca un DNI válido.", "Error", JOptionPane.ERROR_MESSAGE);
+            return false;
         }
+
+        // Validar que los campos no estén vacíos
+        if (dni.isEmpty() || nombre.isEmpty() || apellidos.isEmpty() || numTarjeta.isEmpty()) {
+            JOptionPane.showMessageDialog(frame, "Todos los campos son obligatorios. Por favor, llénelos todos.", "Error", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+
+        // Validar número de tarjeta con una expresión regular simple
+        String tarjetaRegex = "\\d{16}";
+        if (!Pattern.matches(tarjetaRegex, numTarjeta)) {
+            JOptionPane.showMessageDialog(frame, "Formato de número de tarjeta incorrecto. Introduzca un número de tarjeta válido.", "Error", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+
+        return true;
     }
 
     private void mostrarFacturacionAbonos() {
@@ -201,7 +281,7 @@ public class Garaje2 {
         // Calcular el importe usando la tarifa establecida
         double importe = 0.0;
 
-        try (PreparedStatement statement = connection.prepareStatement(minutosQuery)) {
+        try ( PreparedStatement statement = connection.prepareStatement(minutosQuery)) {
             statement.setString(1, dni);
             ResultSet resultSet = statement.executeQuery();
 
@@ -216,16 +296,17 @@ public class Garaje2 {
         return importe;
     }
 
-    private void realizarPago(String dni, String nombre, String apellidos, String numTarjeta, double importe) throws SQLException {
+    private void realizarPago(String dni, String nombre, String apellidos, String numTarjeta, double importe, int numeroCoche) throws SQLException {
         // Consulta para insertar el pago en la tabla Abonos
-        String insertPagoQuery = "INSERT INTO Abonos (dni, nombre, apellidos, num_tarjeta, importe, pagado) VALUES (?, ?, ?, ?, ?, false)";
+        String insertPagoQuery = "INSERT INTO Abonos (dni, nombre, apellidos, num_tarjeta, importe, pagado, numero_coche) VALUES (?, ?, ?, ?, ?, false, ?)";
 
-        try (PreparedStatement statement = connection.prepareStatement(insertPagoQuery)) {
+        try ( PreparedStatement statement = connection.prepareStatement(insertPagoQuery)) {
             statement.setString(1, dni);
             statement.setString(2, nombre);
             statement.setString(3, apellidos);
             statement.setString(4, numTarjeta);
             statement.setDouble(5, importe);
+            statement.setInt(6, numeroCoche);
 
             // Ejecutar la inserción
             statement.executeUpdate();
@@ -257,12 +338,40 @@ public class Garaje2 {
     }
 
     private void calcularMinutos() {
-        try {
-            String horaEntradaStr = JOptionPane.showInputDialog(frame, "Ingrese la hora de entrada (formato HH:mm):");
-            String horaSalidaStr = JOptionPane.showInputDialog(frame, "Ingrese la hora de salida (formato HH:mm):");
+        // Crear un JDialog para la entrada de minutos
+        JDialog minutosDialog = new JDialog(frame, "Calcular Minutos", true);
+        minutosDialog.setLayout(new BorderLayout());
+        minutosDialog.setSize(300, 200);
+        minutosDialog.setLocationRelativeTo(frame);
 
-            if (horaEntradaStr != null && horaSalidaStr != null) {
-                int numeroCoche = inputInt("Ingrese el número del coche:");
+        // Crear un panel para la entrada de minutos
+        JPanel minutosPanel = new JPanel(new GridLayout(4, 2, 10, 10));
+        minutosPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Añadir etiquetas y componentes al panel
+        JTextField horaEntradaField = new JTextField();
+        JTextField horaSalidaField = new JTextField();
+        JComboBox<Integer> numeroCocheComboBox = new JComboBox<>();
+
+        // Cargar números de coche en el combo box
+        cargarNumerosDeCoche(numeroCocheComboBox);
+
+        minutosPanel.add(new JLabel("Hora de Entrada (HH:mm):"));
+        minutosPanel.add(horaEntradaField);
+
+        minutosPanel.add(new JLabel("Hora de Salida (HH:mm):"));
+        minutosPanel.add(horaSalidaField);
+
+        minutosPanel.add(new JLabel("Número de Coche:"));
+        minutosPanel.add(numeroCocheComboBox);
+
+        // Añadir botón de cálculo
+        JButton calcularButton = new JButton("Calcular");
+        calcularButton.addActionListener(e -> {
+            try {
+                String horaEntradaStr = horaEntradaField.getText();
+                String horaSalidaStr = horaSalidaField.getText();
+                int numeroCoche = (int) numeroCocheComboBox.getSelectedItem();
 
                 // Calcular minutos de estancia
                 int minutos = calcularMinutosEstancia(horaEntradaStr, horaSalidaStr);
@@ -270,12 +379,19 @@ public class Garaje2 {
                 // Actualizar la tabla Pagos con la información
                 double coste = calcularCosteParking(minutos);
                 actualizarTablaPagos(numeroCoche, minutos, coste);
+
+                // Cerrar el diálogo después de calcular
+                minutosDialog.dispose();
+            } catch (NumberFormatException | SQLException ex) {
+                handleError("Error al calcular minutos de estancia.", ex);
             }
-        } catch (NumberFormatException e) {
-            handleError("Formato de número incorrecto. Ingrese un valor numérico válido.", e);
-        } catch (Exception e) {
-            handleError("Error al calcular minutos de estancia.", e);
-        }
+        });
+
+        minutosPanel.add(new JLabel());  // Espaciador
+        minutosPanel.add(calcularButton);
+
+        minutosDialog.add(minutosPanel, BorderLayout.CENTER);
+        minutosDialog.setVisible(true);
     }
 
     private int calcularMinutosEstancia(String horaEntradaStr, String horaSalidaStr) throws SQLException {
@@ -294,11 +410,35 @@ public class Garaje2 {
         return minutos * COSTE_MINUTO;
     }
 
+    private void cargarNumerosDeCoche(JComboBox<Integer> comboBox) {
+        try {
+            // Consulta para obtener los números de coche disponibles
+            String query = "SELECT Numero_Coche FROM Coches";
+            PreparedStatement statement = connection.prepareStatement(query);
+            ResultSet resultSet = statement.executeQuery();
+
+            // Limpia el combo box antes de agregar nuevos elementos
+            comboBox.removeAllItems();
+
+            // Agrega los números de coche al combo box
+            while (resultSet.next()) {
+                int numeroCoche = resultSet.getInt("Numero_Coche");
+                comboBox.addItem(numeroCoche);
+            }
+
+            // Cierra los recursos de la base de datos
+            resultSet.close();
+            statement.close();
+        } catch (SQLException e) {
+            handleError("Error al cargar números de coche", e);
+        }
+    }
+
     private void actualizarTablaPagos(int numeroCoche, int minutos, double coste) throws SQLException {
         // Consulta para insertar el pago en la tabla Pagos
         String insertPagoQuery = "INSERT INTO Pagos (numero_coche, minutos_estancia, coste) VALUES (?, ?, ?)";
 
-        try (PreparedStatement statement = connection.prepareStatement(insertPagoQuery)) {
+        try ( PreparedStatement statement = connection.prepareStatement(insertPagoQuery)) {
             statement.setInt(1, numeroCoche);
             statement.setInt(2, minutos);
             statement.setDouble(3, coste);
@@ -354,7 +494,7 @@ public class Garaje2 {
     private boolean plazaOcupada(String selectedPlaza) throws SQLException {
         // Consulta para verificar si la plaza está ocupada
         String query = "SELECT Onuse FROM Plazas_Garaje WHERE Numero = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
+        try ( PreparedStatement statement = connection.prepareStatement(query)) {
             statement.setString(1, selectedPlaza);
             ResultSet resultSet = statement.executeQuery();
             return resultSet.next() && resultSet.getString("Onuse").equalsIgnoreCase("ocupada");
@@ -388,7 +528,7 @@ public class Garaje2 {
     private boolean cocheExists(int numeroCoche) throws SQLException {
         // Consulta para verificar si el número de coche existe en la tabla Coches
         String query = "SELECT 1 FROM Coches WHERE Numero_Coche = ?";
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
+        try ( PreparedStatement statement = connection.prepareStatement(query)) {
             statement.setInt(1, numeroCoche);
             ResultSet resultSet = statement.executeQuery();
             return resultSet.next();
@@ -544,7 +684,7 @@ public class Garaje2 {
 
     private void executeAndDisplayQuery(String query, Object... parameters) throws SQLException {
         DefaultTableModel tablaModelo = new DefaultTableModel();
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
+        try ( PreparedStatement statement = connection.prepareStatement(query)) {
             for (int i = 0; i < parameters.length; i++) {
                 statement.setObject(i + 1, parameters[i]);
             }
@@ -568,7 +708,7 @@ public class Garaje2 {
     }
 
     private void executeUpdateQuery(String query, Object... parameters) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement(query)) {
+        try ( PreparedStatement statement = connection.prepareStatement(query)) {
             for (int i = 0; i < parameters.length; i++) {
                 statement.setObject(i + 1, parameters[i]);
             }
